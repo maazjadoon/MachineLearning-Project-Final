@@ -49,7 +49,7 @@ jobs:
         run: safety check --json --output safety-report.json
 
       - name: Upload security reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: security-reports
           path: |
@@ -89,7 +89,7 @@ jobs:
         run: npm run build
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: frontend-build
           path: frontend/build/
@@ -128,7 +128,7 @@ jobs:
           name: codecov-umbrella
 
       - name: Upload test reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-reports-${{ matrix.python-version }}
           path: |
@@ -187,7 +187,7 @@ jobs:
           pytest tests/integration/ -v --maxfail=1
 
       - name: Upload integration test reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: integration-test-reports
           path: tests/reports/
@@ -213,7 +213,7 @@ jobs:
           k6 run --out json=load-test-results.json tests/load/thresholds.js
 
       - name: Upload load test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: load-test-results
           path: load-test-results.json
