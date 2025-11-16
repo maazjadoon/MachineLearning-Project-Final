@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Sentinel - AI Threat Detection</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    {% include 'nav.html' %}
+    
+    <div class="container">
+        <!-- Main Dashboard -->
+        <div class="dashboard">
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-broadcast-tower"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="totalDetections">0</h3>
+                        <p>Total Detections</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon threat">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="threatsDetected">0</h3>
+                        <p>Threats Detected</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon success">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3 id="normalTraffic">0</h3>
+                        <p>Normal Traffic</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon model">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3>TRM+ENS</h3>
+                        <p>AI Models Active</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="actions-grid">
+                <a href="/detection" class="action-card">
+                    <div class="action-icon">
+                        <i class="fas fa-radar-dish"></i>
+                    </div>
+                    <h3>Real-time Detection</h3>
+                    <p>Monitor live network traffic</p>
+                </a>
+                
+                <a href="/history" class="action-card">
+                    <div class="action-icon">
+                        <i class="fas fa-history"></i>
+                    </div>
+                    <h3>Detection History</h3>
+                    <p>View past threat detections</p>
+                </a>
+                
+                <div class="action-card" onclick="testDetection()">
+                    <div class="action-icon">
+                        <i class="fas fa-vial"></i>
+                    </div>
+                    <h3>Test Detection</h3>
+                    <p>Run sample threat detection</p>
+                </div>
+                
+                <div class="action-card" onclick="showSystemInfo()">
+                    <div class="action-icon">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <h3>System Info</h3>
+                    <p>View model and system status</p>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="recent-activity">
+                <h2>Recent Activity</h2>
+                <div id="activityFeed" class="activity-feed">
+                    <div class="activity-item info">
+                        <i class="fas fa-info-circle"></i>
+                        <span>System initialized. Waiting for network traffic...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Threat Detections -->
+            <div class="threat-detections-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-shield-virus"></i> Live Threat Detections</h2>
+                    <div class="detection-controls">
+                        <span id="detectionCount" class="detection-badge">0 threats</span>
+                        <button class="btn btn-small" onclick="clearDetections()" title="Clear detections">
+                            <i class="fas fa-trash"></i> Clear
+                        </button>
+                    </div>
+                </div>
+                <div id="threatDetections" class="threat-detections-list">
+                    <div class="empty-state">
+                        <i class="fas fa-shield-check"></i>
+                        <p>No threats detected. System is monitoring...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Info Modal -->
+    <div id="systemModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('systemModal')">&times;</span>
+            <h2>System Information</h2>
+            <div class="system-info">
+                <div class="info-item">
+                    <label>AI Model Status:</label>
+                    <span id="modelStatus" class="status-active">Active</span>
+                </div>
+                <div class="info-item">
+                    <label>TRM Model:</label>
+                    <span>Ready (3 recursive steps)</span>
+                </div>
+                <div class="info-item">
+                    <label>Ensemble Model:</label>
+                    <span>Ready (3 algorithms)</span>
+                </div>
+                <div class="info-item">
+                    <label>Socket Connection:</label>
+                    <span id="socketStatus" class="status-active">Connected</span>
+                </div>
+                <div class="info-item">
+                    <label>Last Update:</label>
+                    <span id="lastUpdate">Just now</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

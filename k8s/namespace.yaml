@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cyber-sentinel
+  labels:
+    name: cyber-sentinel
+    environment: production
+    tier: security
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cyber-sentinel-monitoring
+  labels:
+    name: cyber-sentinel-monitoring
+    environment: production
+    tier: monitoring

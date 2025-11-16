@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attack Categories - Cyber Sentinel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+    <style>
+        .category-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+        .category-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        .category-card.enabled {
+            border-left-color: #28a745;
+            background-color: #f8fff9;
+        }
+        .severity-critical { border-left-color: #dc3545 !important; }
+        .severity-high { border-left-color: #fd7e14 !important; }
+        .severity-medium { border-left-color: #ffc107 !important; }
+        .severity-low { border-left-color: #28a745 !important; }
+        
+        .attack-item {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            background: #f8f9fa;
+            transition: all 0.2s ease;
+        }
+        .attack-item:hover {
+            background: #e9ecef;
+        }
+        .attack-item.enabled {
+            background: #d1f2eb;
+            border: 1px solid #28a745;
+        }
+        
+        .badge-severity {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+        }
+        
+        .auto-response {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+        
+        .category-header {
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .category-content {
+            display: none;
+        }
+        
+        .category-content.show {
+            display: block;
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-shield-alt"></i> Cyber Sentinel
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                <a class="nav-link" href="/detection"><i class="fas fa-radar"></i> Detection</a>
+                <a class="nav-link active" href="/attack_categories"><i class="fas fa-list"></i> Categories</a>
+                <a class="nav-link" href="/history"><i class="fas fa-history"></i> History</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h2><i class="fas fa-shield-virus"></i> Attack Categories Management</h2>
+                <p class="text-muted">Configure which attack types the system should automatically detect</p>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <h5 id="total-categories">0</h5>
+                    <small>Total Categories</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <h5 id="enabled-attacks">0</h5>
+                    <small>Enabled Attacks</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <h5 id="critical-enabled">0</h5>
+                    <small>Critical Enabled</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                    <h5 id="coverage-percent">0%</h5>
+                    <small>Coverage</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-bolt"></i> Quick Actions</h5>
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-success" onclick="enableAllCritical()">
+                                <i class="fas fa-exclamation-triangle"></i> Enable All Critical
+                            </button>
+                            <button class="btn btn-warning" onclick="enableAllHigh()">
+                                <i class="fas fa-exclamation-circle"></i> Enable All High
+                            </button>
+                            <button class="btn btn-info" onclick="enablePortScans()">
+                                <i class="fas fa-network-wired"></i> Enable Port Scans
+                            </button>
+                            <button class="btn btn-secondary" onclick="disableAll()">
+                                <i class="fas fa-times"></i> Disable All
+                            </button>
+                        </div>
+                        <button class="btn btn-primary float-end" onclick="refreshCategories()">
+                            <i class="fas fa-sync"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Categories -->
+        <div class="row" id="categories-container">
+            <!-- Categories will be loaded here -->
+        </div>
+    </div>
+
+    <!-- Attack Details Modal -->
+    <div class="modal fade" id="attackModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="attackModalTitle">Attack Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="attackModalBody">
+                    <!-- Attack details will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="toggleAttackBtn">Toggle Detection</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/socket.io.js"></script>
+    <script>
+        let categories = [];
+        let enabledAttacks = [];
+
+        // Initialize Socket.IO
+        const socket = io();
+
+        // Load categories on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCategories();
+        });
+
+        function loadCategories() {
+            fetch('/api/attack_categories')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        categories = data.categories;
+                        enabledAttacks = data.enabled_attacks.map(a => a.id);
+                        updateStatistics();
+                        renderCategories();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading categories:', error);
+                    showAlert('Error loading attack categories', 'danger');
+                });
+        }
+
+        function updateStatistics() {
+            const totalCategories = categories.length;
+            const totalAttacks = categories.reduce((sum, cat) => sum + cat.subcategories.length, 0);
+            const enabledCount = enabledAttacks.length;
+            const criticalCount = categories.reduce((sum, cat) => {
+                return sum + cat.subcategories.filter(sub => 
+                    sub.severity === 'CRITICAL' && enabledAttacks.includes(sub.id)
+                ).length;
+            }, 0);
+            const coverage = totalAttacks > 0 ? Math.round((enabledCount / totalAttacks) * 100) : 0;
+
+            document.getElementById('total-categories').textContent = totalCategories;
+            document.getElementById('enabled-attacks').textContent = enabledCount;
+            document.getElementById('critical-enabled').textContent = criticalCount;
+            document.getElementById('coverage-percent').textContent = coverage + '%';
+        }
+
+        function renderCategories() {
+            const container = document.getElementById('categories-container');
+            container.innerHTML = '';
+
+            categories.forEach((category, index) => {
+                const categoryCol = document.createElement('div');
+                categoryCol.className = 'col-lg-6 mb-4';
+                
+                const enabledCount = category.subcategories.filter(sub => 
+                    enabledAttacks.includes(sub.id)
+                ).length;
+                
+                const severityClass = getSeverityClass(category.subcategories);
+                
+                categoryCol.innerHTML = `
+                    <div class="card category-card ${enabledCount > 0 ? 'enabled' : ''} ${severityClass}">
+                        <div class="card-header category-header" onclick="toggleCategory(${index})">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-chevron-right" id="chevron-${index}"></i>
+                                    ${category.category}
+                                </h5>
+                                <div>
+                                    <span class="badge bg-primary">${enabledCount}/${category.subcategories.length}</span>
+                                    <button class="btn btn-sm btn-outline-success ms-2" 
+                                            onclick="event.stopPropagation(); enableCategoryAll(${index})">
+                                        <i class="fas fa-check"></i> All
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary ms-1" 
+                                            onclick="event.stopPropagation(); disableCategoryAll(${index})">
+                                        <i class="fas fa-times"></i> None
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body category-content" id="category-${index}">
+                            <div class="row">
+                                ${category.subcategories.map(subcat => `
+                                    <div class="col-md-6">
+                                        <div class="attack-item ${enabledAttacks.includes(subcat.id) ? 'enabled' : ''}" 
+                                             onclick="toggleAttack('${subcat.id}')">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div class="flex-grow-1">
+                                                    <h6 class="mb-1">
+                                                        ${enabledAttacks.includes(subcat.id) ? 
+                                                          '<i class="fas fa-check-circle text-success"></i>' : 
+                                                          '<i class="far fa-circle text-muted"></i>'}
+                                                        ${subcat.name}
+                                                    </h6>
+                                                    <small class="text-muted">${subcat.description}</small>
+                                                    <div class="mt-1">
+                                                        <span class="badge badge-severity ${getSeverityBadgeClass(subcat.severity)}">
+                                                            ${subcat.severity}
+                                                        </span>
+                                                        <span class="auto-response ms-2">
+                                                            <i class="fas fa-cog"></i> ${subcat.auto_response}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <button class="btn btn-sm btn-outline-info" 
+                                                        onclick="event.stopPropagation(); showAttackDetails('${subcat.id}')">
+                                                    <i class="fas fa-info"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(categoryCol);
+            });
+        }
+
+        function toggleCategory(index) {
+            const content = document.getElementById(`category-${index}`);
+            const chevron = document.getElementById(`chevron-${index}`);
+            
+            content.classList.toggle('show');
+            chevron.classList.toggle('fa-chevron-right');
+            chevron.classList.toggle('fa-chevron-down');
+        }
+
+        function toggleAttack(attackId) {
+            if (enabledAttacks.includes(attackId)) {
+                disableAttacks([attackId]);
+            } else {
+                enableAttacks([attackId]);
+            }
+        }
+
+        function enableAttacks(attackIds) {
+            fetch('/api/attack_categories/enable', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ attack_ids: attackIds })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    enabledAttacks = data.current_enabled.map(a => a.id);
+                    updateStatistics();
+                    renderCategories();
+                    showAlert(data.message, 'success');
+                } else {
+                    showAlert(data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error enabling attacks:', error);
+                showAlert('Error enabling attack detection', 'danger');
+            });
+        }
+
+        function disableAttacks(attackIds) {
+            fetch('/api/attack_categories/disable', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ attack_ids: attackIds })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    enabledAttacks = data.current_enabled.map(a => a.id);
+                    updateStatistics();
+                    renderCategories();
+                    showAlert(data.message, 'warning');
+                } else {
+                    showAlert(data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error disabling attacks:', error);
+                showAlert('Error disabling attack detection', 'danger');
+            });
+        }
+
+        function enableCategoryAll(index) {
+            const attackIds = categories[index].subcategories.map(sub => sub.id);
+            enableAttacks(attackIds);
+        }
+
+        function disableCategoryAll(index) {
+            const attackIds = categories[index].subcategories.map(sub => sub.id);
+            disableAttacks(attackIds);
+        }
+
+        function enableAllCritical() {
+            const criticalAttacks = [];
+            categories.forEach(category => {
+                category.subcategories.forEach(subcat => {
+                    if (subcat.severity === 'CRITICAL') {
+                        criticalAttacks.push(subcat.id);
+                    }
+                });
+            });
+            enableAttacks(criticalAttacks);
+        }
+
+        function enableAllHigh() {
+            const highAttacks = [];
+            categories.forEach(category => {
+                category.subcategories.forEach(subcat => {
+                    if (subcat.severity === 'HIGH' || subcat.severity === 'CRITICAL') {
+                        highAttacks.push(subcat.id);
+                    }
+                });
+            });
+            enableAttacks(highAttacks);
+        }
+
+        function enablePortScans() {
+            const portScanAttacks = [];
+            const portScanCategory = categories.find(cat => cat.category === 'Port Scan');
+            if (portScanCategory) {
+                portScanAttacks.push(...portScanCategory.subcategories.map(sub => sub.id));
+            }
+            enableAttacks(portScanAttacks);
+        }
+
+        function disableAll() {
+            disableAttacks(enabledAttacks);
+        }
+
+        function showAttackDetails(attackId) {
+            fetch(`/api/attack_categories/${attackId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const modal = new bootstrap.Modal(document.getElementById('attackModal'));
+                        document.getElementById('attackModalTitle').textContent = data.attack_info.name;
+                        
+                        const rules = data.detection_rules;
+                        let rulesHtml = '';
+                        for (const [key, value] of Object.entries(rules)) {
+                            rulesHtml += `<tr><td><strong>${key}:</strong></td><td>${value}</td></tr>`;
+                        }
+                        
+                        document.getElementById('attackModalBody').innerHTML = `
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Attack Information</h6>
+                                    <table class="table table-sm">
+                                        <tr><td><strong>Category:</strong></td><td>${data.attack_info.category}</td></tr>
+                                        <tr><td><strong>Severity:</strong></td><td><span class="badge ${getSeverityBadgeClass(data.attack_info.severity)}">${data.attack_info.severity}</span></td></tr>
+                                        <tr><td><strong>Auto Response:</strong></td><td>${data.attack_info.auto_response}</td></tr>
+                                        <tr><td><strong>Status:</strong></td><td>${data.is_enabled ? '<span class="badge bg-success">Enabled</span>' : '<span class="badge bg-secondary">Disabled</span>'}</td></tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Detection Rules</h6>
+                                    <table class="table table-sm">
+                                        ${rulesHtml}
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <h6>Description</h6>
+                                <p>${data.attack_info.description}</p>
+                            </div>
+                        `;
+                        
+                        const toggleBtn = document.getElementById('toggleAttackBtn');
+                        toggleBtn.textContent = data.is_enabled ? 'Disable Detection' : 'Enable Detection';
+                        toggleBtn.className = data.is_enabled ? 'btn btn-warning' : 'btn btn-success';
+                        toggleBtn.onclick = () => {
+                            if (data.is_enabled) {
+                                disableAttacks([attackId]);
+                            } else {
+                                enableAttacks([attackId]);
+                            }
+                            modal.hide();
+                        };
+                        
+                        modal.show();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading attack details:', error);
+                    showAlert('Error loading attack details', 'danger');
+                });
+        }
+
+        function getSeverityClass(subcategories) {
+            const hasCritical = subcategories.some(sub => sub.severity === 'CRITICAL');
+            const hasHigh = subcategories.some(sub => sub.severity === 'HIGH');
+            
+            if (hasCritical) return 'severity-critical';
+            if (hasHigh) return 'severity-high';
+            
+            return '';
+        }
+
+        function getSeverityBadgeClass(severity) {
+            switch (severity) {
+                case 'CRITICAL': return 'bg-danger';
+                case 'HIGH': return 'bg-warning';
+                case 'MEDIUM': return 'bg-info';
+                case 'LOW': return 'bg-success';
+                default: return 'bg-secondary';
+            }
+        }
+
+        function refreshCategories() {
+            loadCategories();
+            showAlert('Categories refreshed', 'info');
+        }
+
+        function showAlert(message, type) {
+            const alertHtml = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            
+            const container = document.querySelector('.container');
+            container.insertAdjacentHTML('afterbegin', alertHtml);
+            
+            setTimeout(() => {
+                const alert = container.querySelector('.alert');
+                if (alert) {
+                    alert.remove();
+                }
+            }, 5000);
+        }
+
+        // Socket.IO event handlers
+        socket.on('threat_update', function(data) {
+            // Update statistics if new threats are detected
+            updateStatistics();
+        });
+    </script>
+</body>
+</html>

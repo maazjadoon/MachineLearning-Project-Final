@@ -1,0 +1,526 @@
+name: Enterprise CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Code Quality and Security
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Lint with flake8
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Type checking with mypy
+        run: mypy . --ignore-missing-imports
+
+      - name: Security scan with bandit
+        run: bandit -r . -f json -o bandit-report.json
+
+      - name: Dependency security scan
+        run: safety check --json --output safety-report.json
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            safety-report.json
+
+  # Frontend Quality
+  frontend-quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run Prettier check
+        run: npm run format -- --check
+
+      - name: Type checking
+        run: npm run type-check
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: frontend-build
+          path: frontend/build/
+
+  # Unit Tests
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ -v --cov=. --cov-report=xml --cov-report=html
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+      - name: Upload test reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-reports-${{ matrix.python-version }}
+          path: |
+            htmlcov/
+            coverage.xml
+
+  # Integration Tests
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: [code-quality, unit-tests]
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+        run: |
+          pytest tests/integration/ -v --maxfail=1
+
+      - name: Upload integration test reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: integration-test-reports
+          path: tests/reports/
+
+  # Load Testing
+  load-tests:
+    runs-on: ubuntu-latest
+    needs: [integration-tests]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Run load tests
+        run: |
+          k6 run --out json=load-test-results.json tests/load/thresholds.js
+
+      - name: Upload load test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: load-test-results
+          path: load-test-results.json
+
+  # Security Scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: [code-quality]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.10.0
+        with:
+          target: 'http://localhost:5000'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+
+  # Build and Push Docker Images
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: [code-quality, unit-tests, integration-tests, frontend-quality]
+    if: github.event_name != 'pull_request'
+    outputs:
+      threat-service-image: ${{ steps.meta-threat-service.outputs.tags }}
+      ml-service-image: ${{ steps.meta-ml-service.outputs.tags }}
+      analytics-service-image: ${{ steps.meta-analytics-service.outputs.tags }}
+      config-service-image: ${{ steps.meta-config-service.outputs.tags }}
+      web-frontend-image: ${{ steps.meta-web-frontend.outputs.tags }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for threat service
+        id: meta-threat-service
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/threat-service
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push threat service
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.threat
+          push: true
+          tags: ${{ steps.meta-threat-service.outputs.tags }}
+          labels: ${{ steps.meta-threat-service.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract metadata for ML service
+        id: meta-ml-service
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/ml-service
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push ML service
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.ml
+          push: true
+          tags: ${{ steps.meta-ml-service.outputs.tags }}
+          labels: ${{ steps.meta-ml-service.outputs.labels }}
+
+      - name: Extract metadata for analytics service
+        id: meta-analytics-service
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/analytics-service
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push analytics service
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.analytics
+          push: true
+          tags: ${{ steps.meta-analytics-service.outputs.tags }}
+          labels: ${{ steps.meta-analytics-service.outputs.labels }}
+
+      - name: Extract metadata for config service
+        id: meta-config-service
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/config-service
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push config service
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.config
+          push: true
+          tags: ${{ steps.meta-config-service.outputs.tags }}
+          labels: ${{ steps.meta-config-service.outputs.labels }}
+
+      - name: Extract metadata for web frontend
+        id: meta-web-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/web-frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push web frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ steps.meta-web-frontend.outputs.tags }}
+          labels: ${{ steps.meta-web-frontend.outputs.labels }}
+
+  # Deploy to Staging
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [build-and-push, load-tests]
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Deploy to staging
+        run: |
+          export KUBECONFIG=kubeconfig
+          kubectl set image deployment/threat-service threat-service=${{ needs.build-and-push.outputs.threat-service-image }} -n cyber-sentinel-staging
+          kubectl set image deployment/ml-service ml-service=${{ needs.build-and-push.outputs.ml-service-image }} -n cyber-sentinel-staging
+          kubectl set image deployment/analytics-service analytics-service=${{ needs.build-and-push.outputs.analytics-service-image }} -n cyber-sentinel-staging
+          kubectl set image deployment/config-service config-service=${{ needs.build-and-push.outputs.config-service-image }} -n cyber-sentinel-staging
+          kubectl set image deployment/web-frontend web-frontend=${{ needs.build-and-push.outputs.web-frontend-image }} -n cyber-sentinel-staging
+
+      - name: Verify deployment
+        run: |
+          export KUBECONFIG=kubeconfig
+          kubectl rollout status deployment/threat-service -n cyber-sentinel-staging --timeout=300s
+          kubectl rollout status deployment/ml-service -n cyber-sentinel-staging --timeout=300s
+          kubectl rollout status deployment/analytics-service -n cyber-sentinel-staging --timeout=300s
+          kubectl rollout status deployment/config-service -n cyber-sentinel-staging --timeout=300s
+          kubectl rollout status deployment/web-frontend -n cyber-sentinel-staging --timeout=300s
+
+      - name: Run smoke tests
+        run: |
+          sleep 30
+          curl -f https://staging.cybersentinel.ai/health || exit 1
+          curl -f https://staging.cybersentinel.ai/api/v1/threat/stats || exit 1
+
+  # Deploy to Production
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-staging]
+    if: github.event_name == 'release'
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Deploy to production (Blue-Green)
+        run: |
+          export KUBECONFIG=kubeconfig
+          
+          # Deploy to green environment
+          kubectl apply -f k8s/ -n cyber-sentinel-green
+          
+          # Wait for green to be ready
+          kubectl rollout status deployment/threat-service -n cyber-sentinel-green --timeout=600s
+          
+          # Switch traffic to green
+          kubectl patch service cyber-sentinel-service -n cyber-sentinel -p '{"spec":{"selector":{"version":"green"}}}'
+          
+          # Wait for health check
+          sleep 60
+          curl -f https://cybersentinel.ai/health || exit 1
+          
+          # Clean up blue environment
+          kubectl delete namespace cyber-sentinel-blue
+
+      - name: Post-deployment verification
+        run: |
+          # Run comprehensive health checks
+          curl -f https://cybersentinel.ai/health
+          curl -f https://cybersentinel.ai/api/v1/threat/stats
+          curl -f https://cybersentinel.ai/api/v1/ml/models
+          
+          # Run performance tests
+          k6 run tests/performance/production-load.js
+
+      - name: Notify deployment
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        if: always()
+
+  # Performance Monitoring
+  performance-monitoring:
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: github.event_name == 'release'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup performance monitoring
+        run: |
+          # Install monitoring tools
+          pip install prometheus-client grpcio-tools
+
+      - name: Run performance benchmarks
+        run: |
+          # Run performance tests against production
+          python tests/performance/benchmark.py --environment=production
+
+      - name: Update performance dashboards
+        run: |
+          # Update Grafana dashboards with new metrics
+          curl -X POST "${{ secrets.GRAFANA_URL }}/api/dashboards/db" \
+            -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d @monitoring/grafana/dashboards/performance.json
+
+  # Release Documentation
+  release-docs:
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    if: github.event_name == 'release'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate release documentation
+        run: |
+          # Generate API documentation
+          python scripts/generate_docs.py
+          
+          # Generate changelog
+          python scripts/generate_changelog.py --version=${{ github.event.release.tag_name }}
+
+      - name: Deploy documentation
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/build
+          destination_dir: ${{ github.event.release.tag_name }}

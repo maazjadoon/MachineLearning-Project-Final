@@ -1,0 +1,10 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Disallow: /api/
+Disallow: /admin/
+Disallow: /login
+Disallow: /register
+
+Allow: /
+
+Sitemap: https://cybersentinel.ai/sitemap.xml

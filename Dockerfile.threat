@@ -1,0 +1,54 @@
+# Cyber Sentinel ML - Threat Detection Service
+# Enterprise-grade Docker image
+
+FROM python:3.11-slim as base
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -r cyber && useradd -r -g cyber cyber
+
+# Set work directory
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY services/threat_service/ ./services/threat_service/
+COPY attack_categories.py .
+COPY cyber_sentinel_mod.py .
+COPY port_scan_detector.py .
+COPY config.py .
+
+# Create necessary directories
+RUN mkdir -p logs data models
+
+# Set ownership
+RUN chown -R cyber:cyber /app
+
+# Switch to non-root user
+USER cyber
+
+# Expose port
+EXPOSE 5000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
+
+# Default command
+CMD ["python", "services/threat_service/main.py"]

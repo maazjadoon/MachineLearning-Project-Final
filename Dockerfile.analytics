@@ -1,0 +1,61 @@
+# Cyber Sentinel ML - Analytics Service
+# Enterprise-grade Docker image
+
+FROM python:3.11-slim as base
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -r cyber && useradd -r -g cyber cyber
+
+# Set work directory
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Install analytics-specific packages
+RUN pip install --no-cache-dir \
+    pandas==2.0.3 \
+    numpy==1.24.3 \
+    matplotlib==3.7.2 \
+    seaborn==0.12.2 \
+    plotly==5.15.0 \
+    openpyxl==3.1.2 \
+    reportlab==4.0.4
+
+# Copy application code
+COPY services/analytics_service/ ./services/analytics_service/
+COPY config.py .
+
+# Create necessary directories
+RUN mkdir -p logs data reports
+
+# Set ownership
+RUN chown -R cyber:cyber /app
+
+# Switch to non-root user
+USER cyber
+
+# Expose port
+EXPOSE 6000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:6000/health || exit 1
+
+# Default command
+CMD ["python", "services/analytics_service/main.py"]

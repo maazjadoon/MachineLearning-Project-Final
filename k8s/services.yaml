@@ -1,0 +1,281 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: threat-service
+  namespace: cyber-sentinel
+  labels:
+    app: threat-service
+spec:
+  selector:
+    app: threat-service
+  ports:
+  - name: http
+    port: 5000
+    targetPort: 5000
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-service
+  namespace: cyber-sentinel
+  labels:
+    app: ml-service
+spec:
+  selector:
+    app: ml-service
+  ports:
+  - name: http
+    port: 9999
+    targetPort: 9999
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+  namespace: cyber-sentinel
+  labels:
+    app: analytics-service
+spec:
+  selector:
+    app: analytics-service
+  ports:
+  - name: http
+    port: 6000
+    targetPort: 6000
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: config-service
+  namespace: cyber-sentinel
+  labels:
+    app: config-service
+spec:
+  selector:
+    app: config-service
+  ports:
+  - name: http
+    port: 7000
+    targetPort: 7000
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-frontend
+  namespace: cyber-sentinel
+  labels:
+    app: web-frontend
+spec:
+  selector:
+    app: web-frontend
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: cyber-sentinel
+  labels:
+    app: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: cyber-sentinel
+  labels:
+    app: redis
+spec:
+  selector:
+    app: redis
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: 6379
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-service
+  namespace: cyber-sentinel
+  labels:
+    app: kafka
+spec:
+  selector:
+    app: kafka
+  ports:
+  - name: kafka
+    port: 9092
+    targetPort: 9092
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-service
+  namespace: cyber-sentinel
+  labels:
+    app: elasticsearch
+spec:
+  selector:
+    app: elasticsearch
+  ports:
+  - name: http
+    port: 9200
+    targetPort: 9200
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-service
+  namespace: cyber-sentinel-monitoring
+  labels:
+    app: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+  - name: http
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-service
+  namespace: cyber-sentinel-monitoring
+  labels:
+    app: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+    protocol: TCP
+  type: LoadBalancer
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cyber-sentinel-ingress
+  namespace: cyber-sentinel
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "1000"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  tls:
+  - hosts:
+    - cyber-sentinel.example.com
+    - api.cyber-sentinel.example.com
+    secretName: tls-secret
+  rules:
+  - host: cyber-sentinel.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-frontend
+            port:
+              number: 3000
+  - host: api.cyber-sentinel.example.com
+    http:
+      paths:
+      - path: /api/v1/threat(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: threat-service
+            port:
+              number: 5000
+      - path: /api/v1/ml(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: ml-service
+            port:
+              number: 9999
+      - path: /api/v1/analytics(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: analytics-service
+            port:
+              number: 6000
+      - path: /api/v1/config(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: config-service
+            port:
+              number: 7000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring-ingress
+  namespace: cyber-sentinel-monitoring
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - monitoring.cyber-sentinel.example.com
+    secretName: monitoring-tls-secret
+  rules:
+  - host: monitoring.cyber-sentinel.example.com
+    http:
+      paths:
+      - path: /prometheus
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus-service
+            port:
+              number: 9090
+      - path: /grafana
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana-service
+            port:
+              number: 3000

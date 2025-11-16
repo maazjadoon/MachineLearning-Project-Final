@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Detection - Cyber Sentinel</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <a href="/" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 15px;">
+                    <i class="fas fa-shield-alt"></i>
+                    <h1>Cyber Sentinel</h1>
+                </a>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Dashboard</a>
+                <a href="/detection" class="nav-link active">Real-time Detection</a>
+                <a href="/history" class="nav-link">History</a>
+            </div>
+        </header>
+
+        <div class="detection-container">
+            <div class="detection-header">
+                <h2><i class="fas fa-radar-dish"></i> Real-time Threat Detection</h2>
+                <div class="controls">
+                    <!-- Add this button in the controls section -->
+                    <button class="btn btn-secondary" onclick="testPortScan()">
+                        <i class="fas fa-network-wired"></i> Test Port Scan
+                    </button>
+                    <button id="startMonitoring" class="btn btn-primary" onclick="startMonitoring()">
+                        <i class="fas fa-play"></i> Start Monitoring
+                    </button>
+                    <button id="stopMonitoring" class="btn btn-danger" onclick="stopMonitoring()" disabled>
+                        <i class="fas fa-stop"></i> Stop Monitoring
+                    </button>
+                    <button class="btn btn-secondary" onclick="testThreat()">
+                        <i class="fas fa-bug"></i> Test Threat
+                    </button>
+                </div>
+            </div>
+
+            <div class="detection-content">
+                <!-- Live Threat Detections (New Section) -->
+                <div class="live-threats-section">
+                    <h3><i class="fas fa-exclamation-triangle"></i> Live Threat Detections</h3>
+                    <div class="threats-stats">
+                        <span id="threatsCount" class="stat-badge">0 Threats</span>
+                        <span id="lastUpdate" class="stat-badge">Last update: Never</span>
+                    </div>
+                    <div id="liveThreatsContainer" class="live-threats-container">
+                        <div class="empty-state">
+                            <i class="fas fa-shield-alt"></i>
+                            <p>No threats detected yet. System is monitoring...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Traffic Feed -->
+                <div class="traffic-feed">
+                    <h3>Live Network Traffic</h3>
+                    <div id="trafficFeed" class="feed-container">
+                        <div class="empty-state">
+                            <i class="fas fa-network-wired"></i>
+                            <p>Monitoring stopped. Click "Start Monitoring" to begin.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Threat Analysis -->
+                <div class="threat-analysis">
+                    <h3>Threat Analysis</h3>
+                    <div id="threatAnalysis" class="analysis-container">
+                        <div class="empty-state">
+                            <i class="fas fa-search"></i>
+                            <p>No threats analyzed yet. Traffic will appear here when detected.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TRM Reasoning Panel -->
+            <div class="reasoning-panel" id="reasoningPanel" style="display: none;">
+                <h3><i class="fas fa-brain"></i> TRM Reasoning Process</h3>
+                <div id="reasoningContent" class="reasoning-content">
+                    <!-- Reasoning steps will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/detection.js') }}"></script>
+</body>
+</html>
